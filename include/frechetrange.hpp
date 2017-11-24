@@ -136,9 +136,9 @@ private:
   * Trys to find a matching between the trajectories in a greedy fashion,
   * in which case it witnesses that the Fréchet distance is upper bounded.
   */
-  bool FrechetDistance::positiveFilter(const Trajectory& traj1,
-                                       const Trajectory& traj2,
-                                       const double boundSquared) const {
+  bool positiveFilter(const Trajectory& traj1,
+                      const Trajectory& traj2,
+                      const double boundSquared) const {
     size_t idx1 = 0, idx2 = 0;
     while (idx1 < traj1.size() - 1 && idx2 < traj2.size() - 1) {
       // Distances of three next pairings
