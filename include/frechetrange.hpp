@@ -49,17 +49,15 @@ typename Trajectory, typename squareddistancefunctional,
           typename xgetterfunctional, typename ygetterfunctional>
 class FrechetDistance {
 public:
-  squareddistancefunctional squared_distance;
-  xgetterfunctional getx;
-  ygetterfunctional gety;
-
   FrechetDistance(squareddistancefunctional _squared_distance,
                   xgetterfunctional _xgetter, ygetterfunctional _ygetter)
       : squared_distance(_squared_distance), getx(_xgetter), gety(_ygetter),
         _leftSegmentBegins(nullptr), _capacity(0)
 
   {}
+  
   ~FrechetDistance() { delete[] _leftSegmentBegins; }
+  
   /**
   * Returns whether the Frechet distance of the passed trajectories is bounded
   * by the passed upper bound.
@@ -82,6 +80,8 @@ public:
     if (smallerTraj.size() == 1) {
       return comparePointToTrajectory(smallerTraj[0], biggerTraj,
                                       boundSquared);
+    } else if (positiveFilter(traj1, traj2, boundSquared)) {
+      return true;
     } else if (!matchInnerPointsMonotonously(traj1, traj2, boundSquared) ||
                !matchInnerPointsMonotonously(traj2, traj1, boundSquared)) {
       // There exists no monotone matchting from one trajectory to the other,
@@ -95,6 +95,10 @@ public:
   }
 
 private:
+  squareddistancefunctional squared_distance;
+  xgetterfunctional getx;
+  ygetterfunctional gety;
+  
   /**
   * Beginnings of reachable parts of the free space segments on
   * the "frontline", i. e., the right segments of the free space cells lastly
@@ -123,6 +127,67 @@ private:
     }
     return true;
   }
+  
+  /**
+  * Positive greedy filter developed by Baldus and Bringmann in
+  * "A fast implementation of near neighbors queries for Fréchet distance",
+  * SIGSPATIAL'17
+  *
+  * Trys to find a matching between the trajectories in a greedy fashion,
+  * in which case it witnesses that the Fréchet distance is upper bounded.
+  */
+  bool FrechetDistance::positiveFilter(const Trajectory& traj1,
+                                       const Trajectory& traj2,
+                                       const double boundSquared) const {
+    size_t idx1 = 0, idx2 = 0;
+    while (idx1 < traj1.size() - 1 && idx2 < traj2.size() - 1) {
+      // Distances of three next pairings
+      double dist1 = squared_distance(traj1[idx1 + 1], traj2[idx2]);
+      double dist2 = squared_distance(traj1[idx1], traj2[idx2 + 1]);
+      double dist12 = squared_distance(traj1[idx1 + 1], traj2[idx2 + 1]);
+
+      // Find the pair with minimal distance
+      if (dist12 < dist1 && dist12 < dist2) {
+        if (dist12 > boundSquared) {
+          return false;
+        }
+
+        ++idx1;
+        ++idx2;
+      } else if (dist1 < dist2) {
+        if (dist12 > boundSquared) {
+          return false;
+        }
+
+        ++idx1;
+      } else {
+        if (dist12 > boundSquared) {
+          return false;
+        }
+
+        ++idx2;
+      }
+    }
+
+    // Advance to the end of the first trajectory, if necessary
+    while (idx1 < traj1.size() - 2) {
+      ++idx1;
+      if (squared_distance(traj1[idx1], traj2[idx2]) > boundSquared) {
+        return false;
+      }
+    }
+
+    // Advance to the end of the second trajectory, if necessary
+    while (idx2 < traj2.size() - 2) {
+      ++idx2;
+      if (squared_distance(traj1[idx1], traj2[idx2]) > boundSquared) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+  
   /**
   * Ensures that the sequence of passed points can be matched to a sequence of
   * points on the passed segments,
@@ -324,6 +389,7 @@ private:
     // return whether the top-right corner is reachable via its bottom segment
     return isSegmentReachable(currBottomSegBegin);
   }
+  
   /**
   * Increases the allocated memory of the frontline, if necessary,
   * and marks its segments as not reachable.
@@ -339,6 +405,7 @@ private:
     // mark the frontline as not reachable
     std::fill_n(_leftSegmentBegins, rows, BEGIN_NOT_REACHABLE);
   }
+  
   /**
   * Computes the two intersections of the line through p1 and p2
   * with the circle around the center c with the passed radius.
@@ -389,6 +456,7 @@ private:
     begin = (-b - sqrtD) / (2.0 * a);
     end = (-b + sqrtD) / (2.0 * a);
   }
+  
   /**
   * Computes beginning of the reachable part of a free space segment.
   * @param currSegmentBegin The beginning of the intersection of free space
@@ -424,6 +492,7 @@ private:
 
     return currSegmentBegin;
   }
+  
   /**
   * Returns whether a free space segment with the passed
   * beginning of the reachable part (as returned by getReachableBegin)
